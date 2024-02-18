@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realtime WebSocket Audio & Video Streaming</title>
+    <style>
+        body {
+            background-color: black;
+            color: green;
+        }
+
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        div {
+            margin-top: 20px;
+        }
+
+        video {
+            border: 1px solid green;
+            width: 320px;
+            height: 240px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Realtime WebSocket Audio & Video Streaming</h1>
+    <video id="videoPreview" autoplay muted></video>
+    <button id="buttonStart">Start Streaming</button>
+    <button id="buttonStop" disabled>Stop Streaming</button>
+    <div id="responseContainer"></div>
+
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+
+    <script>
+        let socket;
+        let audioRecorder;
+        let videoRecorder;
+
+        async function setupMediaStream ()
+        {
+            try
+            {
+                const stream = await navigator.mediaDevices.getUserMedia( {
+                    audio: true, video: {
+                        frameRate: { ideal: 30, min: 24 } // Specify desired frame rate
+                    },
+                } );
+                document.getElementById( 'videoPreview' ).srcObject = stream;
+
+                setupAudioRecorder( stream );
+                setupVideoRecorder( stream );
+            } catch ( error )
+            {
+                console.error( error );
+            }
+        }
+
+        function setupAudioRecorder ( stream )
+        {
+            const audioTracks = stream.getAudioTracks();
+            const audioStream = new MediaStream( audioTracks );
+            audioRecorder = new RecordRTC( audioStream, {
+                type: 'audio',
+                mimeType: 'audio/wav',
+                desiredSampRate: 16000,
+                recorderType: StereoAudioRecorder,
+                numberOfAudioChannels: 1,
+                timeSlice: 500,
+                ondataavailable: blob =>
+                {
+                    const reader = new FileReader();
+                    reader.onload = () =>
+                    {
+                        const arrayBuffer = reader.result;
+                        socket.emit( 'audioData', arrayBuffer );
+                    };
+                    reader.readAsArrayBuffer( blob );
+                }
+            } );
+        }
+
+        function setupVideoRecorder ( stream )
+        {
+            const videoTracks = stream.getVideoTracks();
+            const videoStream = new MediaStream( videoTracks );
+            videoRecorder = new RecordRTC( videoStream, {
+                type: 'video',
+                mimeType: 'video/webm; codecs=H264',
+                timeSlice: 500,
+                ondataavailable: blob =>
+                {
+                    const reader = new FileReader();
+                    reader.onload = () =>
+                    {
+                        const arrayBuffer = reader.result;
+                        socket.emit( 'videoData', arrayBuffer );
+                    };
+                    reader.readAsArrayBuffer( blob );
+                }
+            } );
+        }
+
+        function startStreaming ()
+        {
+            socket = io( "ws://localhost:8000/", {
+                query: {
+                    interviewToken: "",
+                    email: ""
+                }
+            } );
+            audioRecorder.startRecording();
+            videoRecorder.startRecording();
+            document.getElementById( 'buttonStart' ).disabled = true;
+            document.getElementById( 'buttonStop' ).disabled = false;
+            document.getElementById( 'responseContainer' ).innerHTML = '<p>Streaming...</p>';
+        }
+
+        function stopStreaming ()
+        {
+            audioRecorder.stopRecording();
+            videoRecorder.stopRecording();
+
+            setTimeout( () =>
+            {
+                socket.disconnect();
+
+            }, 1000 );
+            document.getElementById( 'buttonStart' ).disabled = false;
+            document.getElementById( 'buttonStop' ).disabled = true;
+            document.getElementById( 'responseContainer' ).innerHTML = '<p>Stopped</p>';
+        }
+
+        document.getElementById( 'buttonStart' ).addEventListener( 'click', startStreaming );
+        document.getElementById( 'buttonStop' ).addEventListener( 'click', stopStreaming );
+
+        setupMediaStream();
+    </script>
+</body>
+
+</html>

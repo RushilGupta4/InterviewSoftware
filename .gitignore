@@ -6,3 +6,4 @@
 /output
 /img
 .env
+*client_secret*

@@ -2,12 +2,23 @@ from datetime import datetime
 import os
 import time
 import threading
-import numpy as np
+
+import jwt
 import wave
 import torch
 import socketio
 import ffmpeg
+import numpy as np
+from django.contrib.auth import get_user_model
+from urllib.parse import parse_qs
+from asgiref.sync import sync_to_async
+
 from interview.models import Interview
+from interview.views import JWT_ALGORITHM
+from interview.worker import process_media
+
+
+User = get_user_model()
 
 # Load Silero VAD model and utilities
 model, utils = torch.hub.load(
@@ -27,17 +38,18 @@ sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_o
 
 
 class ConnectionHandler:
-    def __init__(self, sid):
+    def __init__(self, sid, interview_id):
         # Set the time gap threshold in seconds
         self.threshold = 2
 
-        # Store the socket id
+        # Store important details
         self.sid = sid
-        self.output_dir = f"output/{datetime.now().strftime('%Y%m%d-%H%M%S')}_{sid}"
+        self.interview_id = interview_id
+        self.output_dir = f"output/{interview_id}-{sid}"
 
         # Initialize buffers
         self.tmp_audio_buffer = np.array([], dtype=np.float32)
-        self.total_audio_buffer = np.array([], dtype=np.float32)
+        self.total_audio_buffer = b""
         self.total_video_bytes = b""
 
         # Initialize VAD iterator
@@ -58,9 +70,10 @@ class ConnectionHandler:
 
     async def process_audio(self, message):
         if isinstance(message, bytes):
+            self.total_audio_buffer += message
+
             new_audio_data = np.frombuffer(message, dtype=np.int16).astype(np.float32) / 32768
             self.tmp_audio_buffer = np.concatenate((self.tmp_audio_buffer, new_audio_data))
-            self.total_audio_buffer = np.concatenate((self.total_audio_buffer, new_audio_data))
 
             while len(self.tmp_audio_buffer) >= WINDOW_SIZE_SAMPLES:
                 chunk = self.tmp_audio_buffer[:WINDOW_SIZE_SAMPLES]
@@ -108,7 +121,12 @@ class ConnectionHandler:
         wav_file = f"{self.output_dir}/audio.wav"
 
         # Rescale the audio data back to int16 range before saving
-        scaled_audio = (self.total_audio_buffer * 32768).astype(np.int16)
+        audio_buffer = (
+            np.frombuffer(self.total_audio_buffer, dtype=np.int16).astype(np.float32) / 32768
+        )
+        scaled_audio = (audio_buffer * 32768).astype(np.int16)
+
+        print(len(self.total_audio_buffer))
 
         # Write the audio data to a WAV file
         with wave.open(wav_file, "wb") as wf:
@@ -132,20 +150,74 @@ class ConnectionHandler:
         print("Video saved to", video_file)
         print("Connection closed successfully", self.sid)
 
+        interview = await sync_to_async(Interview.objects.get)(uid=self.interview_id)
+        process_media(self.output_dir, interview)
+
 
 active_connections = {}
 
 
 @sio.event
 async def connect(sid, environ):
-    print("Client connected:", sid)
-    active_connections[sid] = ConnectionHandler(sid)
-    await active_connections[sid].on_connect()
+    try:
+        query = environ.get("asgi.scope").get("query_string")
+        if not query:
+            await sio.disconnect(sid)
+            return
+
+        query = query.decode("utf-8")
+        query_params = parse_qs(query)
+
+        token = query_params.get("interviewToken")[0]
+        email = query_params.get("email")[0]
+
+    except:
+        await sio.disconnect(sid)
+        return
+
+    if not token or not email:
+        await sio.disconnect(sid)
+        return
+
+    user_exists = await sync_to_async(User.objects.filter(email=email).exists)()
+    if not user_exists:
+        await sio.disconnect(sid)
+        return
+
+    user = await sync_to_async(User.objects.get)(email=email)
+
+    # Validate the token
+    try:
+        payload = jwt.decode(token, user.secret_key, algorithms=[JWT_ALGORITHM])
+        interview_id = payload["interviewId"]
+    except:
+        await sio.disconnect(sid)
+        return
+
+    try:
+        interview_exists = await sync_to_async(
+            Interview.objects.filter(uid=interview_id, user=user).exists
+        )()
+        if not interview_exists:
+            raise ValueError("Invalid interview token.")
+
+        interview = await sync_to_async(Interview.objects.get)(uid=interview_id, user=user)
+        interview.sid = sid
+        await sync_to_async(interview.save)()
+
+        # Proceed with creating a connection handler
+        print(f"Authenticated user: {user.email}")
+        active_connections[sid] = ConnectionHandler(sid, interview_id)
+        await active_connections[sid].on_connect()
+
+    except Exception as e:
+        # Invalid token
+        print("Error:", str(e))
+        await sio.disconnect(sid)
 
 
 @sio.event
 async def disconnect(sid):
-    print("Client disconnected:", sid)
     if sid in active_connections:
         await active_connections[sid].on_disconnect()
         del active_connections[sid]
