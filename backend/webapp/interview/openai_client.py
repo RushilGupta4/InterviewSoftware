@@ -1,63 +1,88 @@
 import json
-from openai import OpenAI
+from threading import Event
+import openai
+from . import prompts
+
+MODEL = "gpt-4-turbo-preview"
+
+
+def get_assistant_id():
+    client = openai.Client()
+    assistants = client.beta.assistants.list()
+
+    filtered_assistants = list(
+        filter(lambda x: x.instructions == prompts.SYSTEM_PROMPT, assistants)
+    )
+    if len(filtered_assistants) > 0:
+        return filtered_assistants[-1].id
+
+    assistant = client.beta.assistants.create(
+        model=MODEL,
+        name="Interview Assistant",
+        instructions=prompts.SYSTEM_PROMPT,
+    )
+    return assistant.id
 
 
 class OpenAIClient:
     def __init__(self):
-        """
-        Initializes the chatbot with an empty chat log.
-        """
-        self.client = OpenAI()
-        self.chat_log = []  # Initialize an empty chat log
-        self.tokens_used = 0  # Initialize the number of tokens used to 0
+        self.client = openai.Client()
+        self.assistant_id = get_assistant_id()
+        self.event = Event()
 
-    def ask(self, message, model="gpt-4", temperature=0.7, max_tokens=150):
-        """
-        Sends a message to the chatbot and appends both the message and response to the chat log.
-        
-        Args:
-        - message (str): The message or question from the user.
-        - model (str): The model to use, defaults to "gpt-4".
-        - temperature (float): Controls randomness in the response. Closer to 1 means more random.
-        - max_tokens (int): The maximum number of tokens to generate in the response.
-        
-        Returns:
-        - str: The response from the chatbot.
-        """
-        self._add_to_chat_log("user", message)
-        response = self.client.ChatCompletion.create(
-            model=model,
-            response_format={ "type": "json_object" },
-            messages=self.chat_log,
-            temperature=temperature,
-            max_tokens=max_tokens
+        self.thread = self.client.beta.threads.create()
+
+    def ask(self, question, instructions=None):
+        message = self.client.beta.threads.messages.create(
+            thread_id=self.thread.id,
+            role="user",
+            content=question,
         )
-        
-        # Extract the text from the response and add it to the chat log
-        response_json = response["choices"][0]["message"]['content']
-        response_text = json.loads(response_json)
 
-        tokens = response["choices"][0]["message"]["num_tokens"]
-        self._add_to_chat_log("assistant", response_text, tokens)
-        
-        return response_text
+        if instructions:
+            run = self.client.beta.threads.runs.create(
+                thread_id=self.thread.id,
+                assistant_id=self.assistant_id,
+                instructions=instructions,
+            )
 
-    def _add_to_chat_log(self, speaker, message, tokens=0):
-        """
-        Adds a message to the chat log with the appropriate speaker label.
-        
-        Args:
-        - speaker (str): The speaker, "Human" or "AI".
-        - message (str): The message content.
-        - tokens (int): The number of tokens used in the response.
-        """
-        self.chat_log.append({"role": speaker, "content": message})
-        self.tokens_used += tokens
+        else:
+            run = self.client.beta.threads.runs.create(
+                thread_id=self.thread.id,
+                assistant_id=self.assistant_id,
+            )
 
-# Example usage:
-api_key = 'YOUR_API_KEY'  # Replace with your actual OpenAI API key
-chatbot = OpenAIClient()
-response = chatbot.ask("What's the weather like today?")
-print(f"GPT-4: {response}")
+        while True:
+            run_status = self.client.beta.threads.runs.retrieve(
+                thread_id=self.thread.id, run_id=run.id
+            )
 
-# Subsequent calls to chatbot.ask will remember the context of the conversation.
+            if run_status.status == "completed":
+                break
+            elif run_status.status == "failed":
+                print(f"Run failed: {run_status.last_error}")
+                break
+
+            self.event.wait(1)
+
+        messages = self.client.beta.threads.messages.list(thread_id=self.thread.id)
+        assistant_response = messages.data[0].content[0].text.value
+        assistant_response = json.loads(assistant_response)
+        return assistant_response
+
+    def get_question(self, transcript):
+        data = self.ask(transcript)
+        interview_ended = data["type"] == "Interview Ended"
+        text = data["text"]
+
+        return interview_ended, text
+
+
+if __name__ == "__main__":
+    chatbot = OpenAIClient()
+
+    response = chatbot.get_question(
+        "We are looking for a Software Developer to build and implement functional programs. You will work with other Developers and Product Managers throughout the software development life cycle. In this role, you should be a team player with a keen eye for detail and problem-solving skills. If you also have experience in Agile frameworks and popular coding languages (e.g. JavaScript), we’d like to meet you. Your goal will be to build efficient programs and systems that serve user needs. Responsibilities Work with developers to design algorithms and flowcharts Produce clean, efficient code based on specifications Integrate software components and third-party programs Verify and deploy programs and systems Troubleshoot, debug and upgrade existing software Gather and evaluate user feedback Recommend and execute improvements Create technical documentation for reference and reporting",
+    )
+
+    print(response)

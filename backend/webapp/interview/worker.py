@@ -46,10 +46,8 @@ def _print(text):
 
 
 def get_feedback(dir_path, comapany_name, job_description):
-    with open(f"{dir_path}/transcript.json", "r") as f:
-        transcript_json = json.load(f)
-
-    transcript = "".join([i["text"] for i in transcript_json["segments"]])
+    with open(f"{dir_path}/transcript.txt", "r") as f:
+        transcript = f.read()
 
     prompt = BASE_PROMPT.format(
         job_description=job_description,
@@ -79,8 +77,7 @@ def get_feedback(dir_path, comapany_name, job_description):
     return resp
 
 
-def get_transcript(dir_path):
-    audio_file = os.path.join(dir_path, "audio.wav")
+def get_transcript(audio_file):
     audio_file = audio_file.replace("output/", "")
 
     transcript = replicate.run(
@@ -90,9 +87,7 @@ def get_transcript(dir_path):
         },
     )
 
-    with open(f"{dir_path}/transcript.json", "w") as f:
-        json.dump(transcript, f)
-
+    transcript = "".join([i["text"] for i in transcript["segments"]])
     return transcript
 
 

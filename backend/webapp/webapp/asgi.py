@@ -15,7 +15,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "webapp.settings")
 django_asgi_app = get_asgi_application()
 
 from socketio import ASGIApp
-from webapp.socket_server import sio
+from interview.socket_server import sio
 
 
 application = ASGIApp(sio, django_asgi_app)

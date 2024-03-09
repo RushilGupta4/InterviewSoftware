@@ -39,7 +39,7 @@
 
 <body>
     <h1>Realtime WebSocket Audio & Video Streaming</h1>
-    <video id="videoPreview" autoplay muted></video>
+    <video id="videoPreview" autoplay muted style='transform: scaleX(-1);'></video>
     <button id="buttonStart">Start Streaming</button>
     <button id="buttonStop" disabled>Stop Streaming</button>
     <div id="responseContainer"></div>
@@ -109,7 +109,7 @@
                     reader.onload = () =>
                     {
                         const arrayBuffer = reader.result;
-                        socket.emit( 'videoData', arrayBuffer );
+                        // socket.emit( 'videoData', arrayBuffer );
                     };
                     reader.readAsArrayBuffer( blob );
                 }
@@ -124,6 +124,13 @@
                     email: ""
                 }
             } );
+
+            socket.on( "chat", ( data ) =>
+            {
+                console.log( data );
+            } );
+
+
             audioRecorder.startRecording();
             videoRecorder.startRecording();
             document.getElementById( 'buttonStart' ).disabled = true;
