@@ -24,7 +24,7 @@ services:
       - "8000:8000"
     environment:
       - WHISPER_SERVICE_URL=http://whisper:5000
-      - WEB_SERVICE_URL=http://web:8000
+      - WEB_SERVICE_URL=http://nginx:80
     env_file:
       - .env
     depends_on:

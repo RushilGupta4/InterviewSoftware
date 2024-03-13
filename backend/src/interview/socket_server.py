@@ -231,7 +231,6 @@ active_connections = {}
 async def connect(sid, environ):
 
     if True:
-
         class U:
             first_name = "Rushil"
             last_name = "Gupta"
