@@ -1,9 +1,11 @@
 import json
+import os
 from threading import Event
 import openai
 from . import prompts
 
 MODEL = "gpt-4-turbo-preview"
+MODEL = "gpt-3.5-turbo"
 
 
 def get_assistant_id():
@@ -26,7 +28,7 @@ def get_assistant_id():
 
 class OpenAIClient:
     def __init__(self):
-        self.client = openai.Client()
+        self.client = openai.Client(api_key=os.environ.get("OPENAI_API_KEY"))
         self.assistant_id = get_assistant_id()
         self.event = Event()
 
@@ -76,6 +78,11 @@ class OpenAIClient:
         text = data["text"]
 
         return interview_ended, text
+
+    def get_feedback(self, user_name):
+        text = f"The interview has finished. Candidate name: {user_name}"
+        data = self.ask(text, instructions=prompts.ANALYSIS_PROMPT)
+        return data
 
 
 if __name__ == "__main__":

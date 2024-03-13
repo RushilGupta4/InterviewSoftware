@@ -2,6 +2,7 @@ from datetime import datetime
 
 import wave
 import numpy as np
+import scipy
 
 
 class MediaBuffer:
@@ -18,9 +19,12 @@ class MediaBuffer:
     def get(self):
         return self.buffer
 
-    def create_wav(self, wav_path):
+    def create_wav(self, wav_path, speed=1):
         audio_buffer = np.frombuffer(self.buffer, dtype=np.int16).astype(np.float32) / 32768
-        scaled_audio = (audio_buffer * 32768).astype(np.int16)
+
+        new_length = int(len(audio_buffer) / speed)
+        resampled_audio = scipy.signal.resample(audio_buffer, new_length)
+        scaled_audio = (resampled_audio * 32768).astype(np.int16)
 
         # Write the audio data to a WAV file
         with wave.open(wav_path, "wb") as wf:

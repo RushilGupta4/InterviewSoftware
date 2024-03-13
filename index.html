@@ -118,7 +118,7 @@
 
         function startStreaming ()
         {
-            socket = io( "ws://localhost:8000/", {
+            socket = io( "ws://192.168.1.10:8000/", {
                 query: {
                     interviewToken: "",
                     email: ""
@@ -128,6 +128,26 @@
             socket.on( "chat", ( data ) =>
             {
                 console.log( data );
+
+                // Display chat information in the response container for visual feedback
+                const responseContainer = document.getElementById( 'responseContainer' );
+                responseContainer.innerHTML += `<p>Message: ${ data.message } <br>Timestamp: ${ data.timestamp }</p>`;
+
+                // Play audio if it exists
+                if ( data.audio )
+                {
+                    let audioSrc = "data:audio/mp3;base64," + data.audio;
+                    let audio = new Audio( audioSrc );
+                    audio.play()
+                        .then( () => console.log( "Playing audio message..." ) )
+                        .catch( error => console.error( "Error playing the audio:", error ) );
+                }
+
+                // Check if the interview has ended and stop streaming if it has
+                if ( data.interview_ended )
+                {
+                    stopStreaming();
+                }
             } );
 
 
