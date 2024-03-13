@@ -1,13 +1,12 @@
 import os
 import requests
 
-url = os.environ.get("WhisperURL", "http://localhost:5000/predictions")
-base_output_url = "http://host.docker.internal:6000/"
+url = f'{os.environ.get("WHISPER_SERVICE_URL", "http://localhost:5000")}/predictions'
+base_output_url = os.environ.get("WEB_SERVICE_URL", "http://host.docker.internal:6000/")
 
 
 def get_transcript(audio_path):
-    audio_file = audio_path.replace("output/", "")
-    audio_file = base_output_url + audio_file
+    audio_file = base_output_url + audio_path
 
     response = requests.post(
         url, json={"input": {"audio_file": audio_file, "batch_size": 16, "language": "en"}}

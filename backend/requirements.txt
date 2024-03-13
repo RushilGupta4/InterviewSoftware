@@ -1,0 +1,16 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.2.1+cu121
+torchaudio==2.2.1+cu121
+bcrypt==4.1.2
+django-cors-headers==4.3.1
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+ffmpeg-python==0.2.0
+google-auth==2.28.2
+numpy==1.26.4
+openai==1.13.3
+python-socketio==5.11.1
+requests==2.31.0
+scipy==1.12.0
+uvicorn==0.28.0
+gTTS==2.5.1e
