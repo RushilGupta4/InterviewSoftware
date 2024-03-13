@@ -6,7 +6,7 @@ base_output_url = os.environ.get("WEB_SERVICE_URL", "http://host.docker.internal
 
 
 def get_transcript(audio_path):
-    audio_file = base_output_url + audio_path
+    audio_file = f"{base_output_url}/{audio_path}"
 
     response = requests.post(
         url, json={"input": {"audio_file": audio_file, "batch_size": 16, "language": "en"}}

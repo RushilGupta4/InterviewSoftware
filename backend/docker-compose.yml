@@ -2,22 +2,34 @@ version: '3.8'
 services:
   whisper:
     image: ruzil357/whisperx:v1.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     ports:
       - "5000:5000"
     environment:
       - COMPUTE_TYPE=int8
+
   web:
     build: .
-    command: uvicorn webapp.asgi:application --host 0.0.0.0 --port 8000
+    image: webapp
+    command: ../venv/bin/uvicorn webapp.asgi:application --host 0.0.0.0 --port 8000
     volumes:
-      - output_volume:/app/output
+      - output_volume:/src/output
     ports:
       - "8000:8000"
     environment:
       - WHISPER_SERVICE_URL=http://whisper:5000
       - WEB_SERVICE_URL=http://web:8000
+    env_file:
+      - .env
     depends_on:
       - whisper
+
   nginx:
     image: nginx:latest
     ports:
@@ -27,5 +39,6 @@ services:
       - output_volume:/output
     depends_on:
       - web
-  volumes:
-    output_volume: {}
+    
+volumes:
+  output_volume: {}
