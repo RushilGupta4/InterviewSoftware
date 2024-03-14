@@ -13,7 +13,7 @@ def get_assistant_id():
     assistants = client.beta.assistants.list()
 
     filtered_assistants = list(
-        filter(lambda x: x.instructions == prompts.SYSTEM_PROMPT, assistants)
+        filter(lambda x: x.instructions == prompts.SYSTEM_PROMPT and x.model == MODEL, assistants)
     )
     if len(filtered_assistants) > 0:
         return filtered_assistants[-1].id
