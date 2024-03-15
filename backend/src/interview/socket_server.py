@@ -133,21 +133,17 @@ class ConnectionHandler:
         os.remove(raw_video_file)
 
         if not NO_RESPONSES:
-            chats = [
-                {
-                    "message": i.message,
-                    "role": i.role,
-                    "interview_ended": i.interview_ended,
-                    "timestamp": i.timestamp,
-                }
-                for i in self.chats
-            ]
+            feedback = self.llm_client.get_feedback(self.user_name, self.chats)
 
-            feedback = self.llm_client.get_feedback(self.user_name)
+            with open(f"{self.output_dir}/feedback.json", "w") as f:
+                json.dump(feedback, f)
+
+            with open(f"{self.output_dir}/transcript.json", "w") as f:
+                json.dump([i.to_dict() for i in self.chats], f)
 
             # TODO: Save the interview details to the database
             interview: Interview = await sync_to_async(Interview.objects.get)(uid=self.interview_id)
-            interview.transcript = json.dumps(chats)
+            interview.transcript = json.dumps([i.to_dict() for i in self.chats])
             interview.feedback = json.dumps(feedback)
             interview.completed = True
             await sync_to_async(interview.save)()
@@ -243,7 +239,7 @@ class ConnectionHandler:
 
         # Get the next question from OpenAI
         interview_ended, text = self.llm_client.get_question(transcript)
-        print(text)
+        print("Question:", text)
         chat = Chat(text, "assistant", interview_ended)
         self.chats.append(chat)
 
