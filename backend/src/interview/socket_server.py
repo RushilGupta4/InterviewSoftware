@@ -141,7 +141,13 @@ class ConnectionHandler:
             with open(f"{self.output_dir}/transcript.json", "w") as f:
                 json.dump([i.to_dict() for i in self.chats], f)
 
-            # TODO: Save the interview details to the database
+            # Check whether the interview object exists
+            interview_exists = await sync_to_async(
+                Interview.objects.filter(uid=self.interview_id).exists
+            )()
+            if not interview_exists:
+                return
+
             interview: Interview = await sync_to_async(Interview.objects.get)(uid=self.interview_id)
             interview.transcript = json.dumps([i.to_dict() for i in self.chats])
             interview.feedback = json.dumps(feedback)
@@ -153,7 +159,7 @@ class ConnectionHandler:
         del active_connections[self.sid]
 
     async def send_chat(self, chat: Chat):
-        chat_data = chat.__dict__
+        chat_data = chat.to_dict()
 
         tts = gTTS(chat_data["message"], lang="en")
         audio_buffer = io.BytesIO()
