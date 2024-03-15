@@ -77,12 +77,13 @@
             const audioStream = new MediaStream( audioTracks );
             audioRecorder = new RecordRTC( audioStream, {
                 type: 'audio',
-                mimeType: 'audio/wav',
+                // mimeType: 'audio/wav',
                 desiredSampRate: 16000,
                 recorderType: StereoAudioRecorder,
                 numberOfAudioChannels: 1,
                 timeSlice: 500,
-                ondataavailable: blob =>
+                bufferSize: 16384,
+                ondataavailable: async blob =>
                 {
                     const reader = new FileReader();
                     reader.onloadend = () =>

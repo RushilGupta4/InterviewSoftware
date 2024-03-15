@@ -93,6 +93,9 @@ class ConnectionHandler:
     async def on_connect(self):
         print("Client connected:", self.sid)
 
+        if NO_RESPONSES:
+            return
+
         self.check_gap_task = asyncio.create_task(self.check_time_gap())
         first_chat = self.chats[0]
         await self.send_chat(first_chat)
@@ -100,9 +103,9 @@ class ConnectionHandler:
     async def on_disconnect(self):
         if self.disconnecting:
             return
-        
+
         self.disconnecting = True
-        
+
         print("Client disconnecting:", self.sid)
 
         # Kill the thread
@@ -132,13 +135,15 @@ class ConnectionHandler:
         if NO_RESPONSES:
             return
 
-        chats = [{
-            "message": i.message,
-            "role": i.role,
-            "interview_ended": i.interview_ended,
-            "timestamp": i.timestamp
-            
-        } for i in self.chats]
+        chats = [
+            {
+                "message": i.message,
+                "role": i.role,
+                "interview_ended": i.interview_ended,
+                "timestamp": i.timestamp,
+            }
+            for i in self.chats
+        ]
         with open(f"{self.output_dir}/transcript.json", "w") as f:
             json.dump(chats, f)
 
@@ -259,7 +264,8 @@ active_connections = {}
 @sio.event
 async def connect(sid, environ):
 
-    if True:
+    if NO_RESPONSES:
+
         class U:
             first_name = "Rushil"
             last_name = "Gupta"
