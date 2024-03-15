@@ -44,3 +44,11 @@ class Chat:
         self.role = role
         self.interview_ended = interview_ended
         self.timestamp = datetime.now().isoformat()
+
+    def to_dict(self):
+        return {
+            "message": self.message,
+            "role": self.role,
+            "interview_ended": self.interview_ended,
+            "timestamp": self.timestamp,
+        }

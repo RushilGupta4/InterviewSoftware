@@ -16,11 +16,11 @@ from urllib.parse import parse_qs
 from asgiref.sync import sync_to_async
 from gtts import gTTS
 
-from interview.models import Interview
-from interview.views import JWT_ALGORITHM
-from .transcript_helper import get_transcript
 from users.models import User
-from .openai_client import OpenAIClient
+from .models import Interview
+from .views import JWT_ALGORITHM
+from .transcript_helper import get_transcript
+from .llm_client import LLMClient
 from .utils import MediaBuffer, Chat
 
 # Load Silero VAD model and utilities
@@ -40,7 +40,7 @@ WINDOW_SIZE_SAMPLES = 1536  # Number of samples in a single audio chunk
 mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_origins="*")
 
-NO_RESPONSES = True
+NO_RESPONSES = False
 
 
 class ConnectionHandler:
@@ -51,7 +51,7 @@ class ConnectionHandler:
 
         # Store important details
         self.sid = sid
-        self.interview_id = "test"
+        self.interview_id = interview.uid
         self.user_name = f"{user.first_name} {user.last_name}"
 
         # Disconnector
@@ -82,9 +82,9 @@ class ConnectionHandler:
 
         # Chats
         self.chats: list[Chat] = []
-        self.openai_client = OpenAIClient()
+        self.llm_client = LLMClient()
 
-        interview_done, first_question = self.openai_client.get_question(
+        interview_done, first_question = self.llm_client.get_question(
             f"Company Name: {interview.company_name}\nJob Description: {interview.job_description}\n Candidate Name: {self.user_name}"
         )
         first_chat = Chat(first_question, "assistant", interview_done)
@@ -132,26 +132,25 @@ class ConnectionHandler:
         ).run()
         os.remove(raw_video_file)
 
-        if NO_RESPONSES:
-            return
+        if not NO_RESPONSES:
+            chats = [
+                {
+                    "message": i.message,
+                    "role": i.role,
+                    "interview_ended": i.interview_ended,
+                    "timestamp": i.timestamp,
+                }
+                for i in self.chats
+            ]
 
-        chats = [
-            {
-                "message": i.message,
-                "role": i.role,
-                "interview_ended": i.interview_ended,
-                "timestamp": i.timestamp,
-            }
-            for i in self.chats
-        ]
-        with open(f"{self.output_dir}/transcript.json", "w") as f:
-            json.dump(chats, f)
+            feedback = self.llm_client.get_feedback(self.user_name)
 
-        feedback = self.openai_client.get_feedback(self.user_name)
-        with open(f"{self.output_dir}/feedback.json", "w") as f:
-            json.dump(feedback, f)
-
-        # TODO: Save the interview details to the database
+            # TODO: Save the interview details to the database
+            interview: Interview = await sync_to_async(Interview.objects.get)(uid=self.interview_id)
+            interview.transcript = json.dumps(chats)
+            interview.feedback = json.dumps(feedback)
+            interview.completed = True
+            await sync_to_async(interview.save)()
 
         print("Client disconnected:", self.sid)
         self.disconnecting = False
@@ -243,7 +242,7 @@ class ConnectionHandler:
         os.remove(wav_file)
 
         # Get the next question from OpenAI
-        interview_ended, text = self.openai_client.get_question(transcript)
+        interview_ended, text = self.llm_client.get_question(transcript)
         print(text)
         chat = Chat(text, "assistant", interview_ended)
         self.chats.append(chat)
@@ -264,7 +263,7 @@ active_connections = {}
 @sio.event
 async def connect(sid, environ):
 
-    if NO_RESPONSES:
+    if True:
 
         class U:
             first_name = "Rushil"
@@ -306,7 +305,7 @@ async def connect(sid, environ):
         await sio.disconnect(sid)
         return
 
-    user = await sync_to_async(User.objects.get)(email=email)
+    user: User = await sync_to_async(User.objects.get)(email=email)
 
     # Validate the token
     try:
@@ -323,8 +322,11 @@ async def connect(sid, environ):
         if not interview_exists:
             raise ValueError("Invalid interview token.")
 
-        interview = await sync_to_async(Interview.objects.get)(uid=interview_id, user=user)
+        interview: Interview = await sync_to_async(Interview.objects.get)(
+            uid=interview_id, user=user
+        )
         interview.sid = sid
+        interview.started = True
         await sync_to_async(interview.save)()
 
         # Proceed with creating a connection handler

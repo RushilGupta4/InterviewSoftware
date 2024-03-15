@@ -11,13 +11,10 @@ type AuthContextType = {
   error: string | null;
 };
 
-type AuthProviderProps = {
-  children: ReactNode;
-};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: {children: ReactNode}) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

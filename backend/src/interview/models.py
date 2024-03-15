@@ -17,7 +17,9 @@ class Interview(models.Model):
 
     feedback = models.TextField(null=True)
     transcript = models.TextField(null=True)
-    confidence = models.IntegerField(null=True)
+
+    started = models.BooleanField(default=False)
+    completed = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
