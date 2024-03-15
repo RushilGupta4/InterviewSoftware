@@ -9,7 +9,15 @@ def get_transcript(audio_path):
     audio_file = f"{base_output_url}/{audio_path}"
 
     response = requests.post(
-        url, json={"input": {"audio_file": audio_file, "batch_size": 16, "language": "en"}}
+        url,
+        json={
+            "input": {
+                "audio_file": audio_file,
+                "batch_size": 16,
+                "language": "en",
+                "initial_prompt": "Include Disfluencies like stutters, uhh, umm, uh, ah, ahh, etc.",
+            }
+        },
     )
     if response.status_code == 200:
         try:
