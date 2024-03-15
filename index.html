@@ -85,7 +85,7 @@
                 ondataavailable: blob =>
                 {
                     const reader = new FileReader();
-                    reader.onload = () =>
+                    reader.onloadend = () =>
                     {
                         const arrayBuffer = reader.result;
                         socket.emit( 'audioData', arrayBuffer );
@@ -118,7 +118,7 @@
 
         function startStreaming ()
         {
-            socket = io( "ws://192.168.1.10:8000/", {
+            socket = io( "ws://192.168.1.10:80/", {
                 query: {
                     interviewToken: "",
                     email: ""

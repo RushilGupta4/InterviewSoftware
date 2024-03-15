@@ -28,7 +28,7 @@ model, utils = torch.hub.load(
     repo_or_dir="snakers4/silero-vad",
     model="silero_vad",
     force_reload=False,
-    onnx=False,
+    onnx=True,
 )
 (_, _, _, VADIterator, _) = utils
 
@@ -39,6 +39,8 @@ WINDOW_SIZE_SAMPLES = 1536  # Number of samples in a single audio chunk
 # mgr = socketio.AsyncRedisManager("redis://0.0.0.0:6379/0")
 mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_origins="*")
+
+NO_RESPONSES = True
 
 
 class ConnectionHandler:
@@ -51,6 +53,9 @@ class ConnectionHandler:
         self.sid = sid
         self.interview_id = "test"
         self.user_name = f"{user.first_name} {user.last_name}"
+
+        # Disconnector
+        self.disconnecting = False
 
         self.output_dir = f"output/{self.interview_id}-{sid}"
 
@@ -72,9 +77,11 @@ class ConnectionHandler:
         self.running = True
         self.check_gap_task = None
 
-        # Chats
-        self.chats = []
+        if NO_RESPONSES:
+            return
 
+        # Chats
+        self.chats: list[Chat] = []
         self.openai_client = OpenAIClient()
 
         interview_done, first_question = self.openai_client.get_question(
@@ -91,7 +98,12 @@ class ConnectionHandler:
         await self.send_chat(first_chat)
 
     async def on_disconnect(self):
-        print("Client disconnected:", self.sid)
+        if self.disconnecting:
+            return
+        
+        self.disconnecting = True
+        
+        print("Client disconnecting:", self.sid)
 
         # Kill the thread
         self.running = False
@@ -115,8 +127,18 @@ class ConnectionHandler:
         ffmpeg.input(raw_video_file).output(
             video_file, vcodec="libx264", crf=23, f="mp4", r=30, loglevel="quiet"
         ).run()
+        os.remove(raw_video_file)
 
-        chats = [i.__dict__ for i in self.chats]
+        if NO_RESPONSES:
+            return
+
+        chats = [{
+            "message": i.message,
+            "role": i.role,
+            "interview_ended": i.interview_ended,
+            "timestamp": i.timestamp
+            
+        } for i in self.chats]
         with open(f"{self.output_dir}/transcript.json", "w") as f:
             json.dump(chats, f)
 
@@ -126,6 +148,8 @@ class ConnectionHandler:
 
         # TODO: Save the interview details to the database
 
+        print("Client disconnected:", self.sid)
+        self.disconnecting = False
         del active_connections[self.sid]
 
     async def send_chat(self, chat: Chat):
@@ -194,6 +218,9 @@ class ConnectionHandler:
         if self.getting_next_question:
             return
 
+        if NO_RESPONSES:
+            return
+
         self.getting_next_question = True
 
         # Save the audio to a wav file
@@ -207,6 +234,8 @@ class ConnectionHandler:
         print("Transcript:", transcript)
         chat = Chat(transcript, "user", False)
         self.chats.append(chat)
+
+        os.remove(wav_file)
 
         # Get the next question from OpenAI
         interview_ended, text = self.openai_client.get_question(transcript)
