@@ -1,17 +1,12 @@
 import copy
 import json
-from datetime import datetime
 import os
-import time
 import io
 import base64
 
 import jwt
-import torch
 import socketio
 import ffmpeg
-import numpy as np
-import asyncio
 from urllib.parse import parse_qs
 from asgiref.sync import sync_to_async
 from gtts import gTTS
@@ -23,20 +18,10 @@ from .transcript_helper import get_transcript
 from .llm_client import LLMClient
 from .utils import MediaBuffer, Chat
 
-# Load Silero VAD model and utilities
-model, utils = torch.hub.load(
-    repo_or_dir="snakers4/silero-vad",
-    model="silero_vad",
-    force_reload=False,
-    onnx=True,
-)
-(_, _, _, VADIterator, _) = utils
-
 # Constants
 SAMPLING_RATE = 16000
 WINDOW_SIZE_SAMPLES = 1536  # Number of samples in a single audio chunk
 
-# mgr = socketio.AsyncRedisManager("redis://0.0.0.0:6379/0")
 mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_origins="*")
 
@@ -58,24 +43,17 @@ class ConnectionHandler:
         self.disconnecting = False
 
         self.output_dir = f"output/{self.interview_id}-{sid}"
-
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
         # Initialize buffers
-        self.tmp_audio_buffer = np.array([], dtype=np.float32)
         self.current_question_audio_buffer = MediaBuffer(SAMPLING_RATE)
         self.total_audio_buffer = MediaBuffer(SAMPLING_RATE)
         self.total_video_bytes = MediaBuffer(SAMPLING_RATE)
 
         # Initialize VAD iterator
-        self.vad_iterator = VADIterator(model)
-        self.last_vad_time = None
         self.getting_next_question = False
-
-        # Create an event for time gap checking
-        self.running = True
-        self.check_gap_task = None
+        self.is_responding = False
 
         if NO_RESPONSES:
             return
@@ -96,7 +74,6 @@ class ConnectionHandler:
         if NO_RESPONSES:
             return
 
-        self.check_gap_task = asyncio.create_task(self.check_time_gap())
         first_chat = self.chats[0]
         await self.send_chat(first_chat)
 
@@ -108,22 +85,13 @@ class ConnectionHandler:
 
         print("Client disconnecting:", self.sid)
 
-        # Kill the thread
-        self.running = False
-        if self.check_gap_task:  # Ensure there's a task to cancel
-            self.check_gap_task.cancel()
-            try:
-                await self.check_gap_task  # Await the task to handle the cancellation
-            except asyncio.CancelledError:
-                pass  # Task cancellation will raise CancelledError, which can be ignored
-
         # Save the audio to a wav file
         wav_file = f"{self.output_dir}/audio.wav"
         self.total_audio_buffer.create_wav(wav_file)
 
         # Save the video buffer to a file
         raw_video_file = f"{self.output_dir}/video.raw"
-        self.total_audio_buffer.write_bytes(raw_video_file)
+        self.total_video_bytes.write_bytes(raw_video_file)
 
         # Convert the raw video to mp4
         video_file = f"{self.output_dir}/video.mp4"
@@ -172,53 +140,29 @@ class ConnectionHandler:
         await sio.emit("chat", chat_data, to=self.sid)
 
     async def process_video(self, message):
+        if not self.is_responding:
+            return
+        
         # Append video data to the buffer
         if isinstance(message, bytes):
             self.total_video_bytes.append(message)
-
+    
     async def process_audio(self, message):
+        if not self.is_responding:
+            return
+        
         if isinstance(message, bytes):
             self.total_audio_buffer.append(message)
             self.current_question_audio_buffer.append(message)
+    
+    async def manage_responding_status(self, message):
+        if message == self.is_responding:
+            return
 
-            new_audio_data = np.frombuffer(message, dtype=np.int16).astype(np.float32) / 32768
-            self.tmp_audio_buffer = np.concatenate((self.tmp_audio_buffer, new_audio_data))
-
-            while len(self.tmp_audio_buffer) >= WINDOW_SIZE_SAMPLES:
-                chunk = self.tmp_audio_buffer[:WINDOW_SIZE_SAMPLES]
-                self.tmp_audio_buffer = self.tmp_audio_buffer[WINDOW_SIZE_SAMPLES:]
-
-                chunk_tensor = torch.from_numpy(chunk).unsqueeze(0)
-                vad_result = self.vad_iterator(chunk_tensor, return_seconds=True)
-
-                if not vad_result:
-                    continue
-
-                if "start" not in vad_result and "end" not in vad_result:
-                    continue
-
-                print("Detected voice activity")
-                self.last_vad_time = time.time()
-
-        self.vad_iterator.reset_states()  # Reset VAD model states after processing is complete
-
-    async def check_time_gap(self):
-        # Check event.is_set to see if the thread should stop
-        while self.running:
-            await asyncio.sleep(0.2)
-
-            if self.getting_next_question:
-                continue
-
-            if not self.last_vad_time:
-                continue
-
-            gap = time.time() - self.last_vad_time
-
-            if gap > self.threshold:
-                await self.ask_next_question()
-                await asyncio.sleep(0.2)
-                self.last_vad_time = None
+        self.is_responding = message
+        if not self.is_responding:
+            await self.ask_next_question()
+        
 
     async def ask_next_question(self):
         if self.getting_next_question:
@@ -259,7 +203,7 @@ class ConnectionHandler:
         print()
 
 
-active_connections = {}
+active_connections: dict[str, ConnectionHandler] = {}
 
 
 @sio.event
@@ -358,3 +302,8 @@ async def process_audio(sid, data):
 async def process_video(sid, data):
     if sid in active_connections:
         await active_connections[sid].process_video(data)
+
+@sio.on("respondingStatus")
+async def manage_responding_status(sid, data):
+    if sid in active_connections:
+        await active_connections[sid].manage_responding_status(data)

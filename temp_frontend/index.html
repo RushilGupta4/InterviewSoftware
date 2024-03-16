@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realtime WebSocket Audio & Video Streaming</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header>
+        <h1>Realtime WebSocket Audio & Video Interview</h1>
+    </header>
+
+    <main>
+        <video id="videoPreview" autoplay muted style="transform: scaleX(-1);"></video>
+
+        <div class="button-controls">
+            <button id="respondingToggle" disabled>Start Responding</button>
+        </div>
+
+        <div class="button-controls">
+            <button id="buttonStart">Start Interview</button>
+            <button id="buttonStop" disabled>Stop Interview</button>
+        </div>
+
+
+        <div id="responseContainer"></div>
+    </main>
+
+    <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+    <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>

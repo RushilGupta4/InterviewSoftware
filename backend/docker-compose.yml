@@ -10,7 +10,7 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "5000:5000"
+      - '5000:5000'
     environment:
       - COMPUTE_TYPE=int8
 
@@ -20,8 +20,9 @@ services:
     command: ../venv/bin/uvicorn webapp.asgi:application --host 0.0.0.0 --port 8000 --workers 1
     volumes:
       - output_volume:/src/output
+      - ./env:/venv
     ports:
-      - "8000:8000"
+      - '8000:8000'
     environment:
       - WHISPER_SERVICE_URL=http://whisper:5000
       - WEB_SERVICE_URL=http://nginx:80
@@ -33,12 +34,12 @@ services:
   nginx:
     image: nginx:latest
     ports:
-      - "80:80"
+      - '80:80'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - output_volume:/output
     depends_on:
       - web
-    
+
 volumes:
   output_volume: {}

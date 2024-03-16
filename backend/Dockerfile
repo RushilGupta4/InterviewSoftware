@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR .
 COPY . .
 
-RUN python3.11 -m venv ./venv
-RUN venv/bin/pip install -r requirements.txt
+# RUN python3.11 -m venv ./venv
+# RUN venv/bin/pip install -r requirements.txt
 
 WORKDIR /src

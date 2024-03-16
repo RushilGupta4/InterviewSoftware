@@ -40,8 +40,11 @@
 <body>
     <h1>Realtime WebSocket Audio & Video Streaming</h1>
     <video id="videoPreview" autoplay muted style='transform: scaleX(-1);'></video>
-    <button id="buttonStart">Start Streaming</button>
-    <button id="buttonStop" disabled>Stop Streaming</button>
+    <button id="buttonStart">Start Interview</button>
+    <button id="buttonStop" disabled>Stop Interview</button>
+
+    <button id='startResponding' hidden>Start Responding</button>
+    <button id='stopResponding' hidden>Stop Responding</button>
     <div id="responseContainer"></div>
 
     <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
@@ -51,6 +54,13 @@
         let socket;
         let audioRecorder;
         let videoRecorder;
+
+        async function manageResponding ( status )
+        {
+            if ( !socket ) return;
+
+            socket.emit( 'respondingStatus', status );
+        }
 
         async function setupMediaStream ()
         {
@@ -119,7 +129,7 @@
 
         function startStreaming ()
         {
-            socket = io( "ws://192.168.1.10:80/", {
+            socket = io( "ws://192.168.1.10:8000/", {
                 query: {
                     interviewToken: "",
                     email: ""
@@ -152,17 +162,25 @@
             } );
 
 
-            audioRecorder.startRecording();
-            videoRecorder.startRecording();
+            // audioRecorder.startRecording();
+            // videoRecorder.startRecording();
             document.getElementById( 'buttonStart' ).disabled = true;
             document.getElementById( 'buttonStop' ).disabled = false;
             document.getElementById( 'responseContainer' ).innerHTML = '<p>Streaming...</p>';
+
+            // Show the start and stop responding buttons
+            document.getElementById( 'startResponding' ).hidden = false;
+            document.getElementById( 'stopResponding' ).hidden = false;
         }
 
         function stopStreaming ()
         {
-            audioRecorder.stopRecording();
-            videoRecorder.stopRecording();
+            // audioRecorder.stopRecording();
+            // videoRecorder.stopRecording();
+
+            //  Hide the start and stop responding buttons
+            document.getElementById( 'startResponding' ).hidden = true;
+            document.getElementById( 'stopResponding' ).hidden = true;
 
             setTimeout( () =>
             {
@@ -171,11 +189,14 @@
             }, 1000 );
             document.getElementById( 'buttonStart' ).disabled = false;
             document.getElementById( 'buttonStop' ).disabled = true;
-            document.getElementById( 'responseContainer' ).innerHTML = '<p>Stopped</p>';
+            document.getElementById( 'responseContainer' ).innerHTML += '<p>Stopped</p>';
         }
 
         document.getElementById( 'buttonStart' ).addEventListener( 'click', startStreaming );
         document.getElementById( 'buttonStop' ).addEventListener( 'click', stopStreaming );
+
+        document.getElementById( 'startResponding' ).addEventListener( 'click', () => manageResponding( true ) );
+        document.getElementById( 'stopResponding' ).addEventListener( 'click', () => manageResponding( false ) );
 
         setupMediaStream();
     </script>
