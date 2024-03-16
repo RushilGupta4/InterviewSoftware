@@ -20,7 +20,6 @@ services:
     command: ../venv/bin/uvicorn webapp.asgi:application --host 0.0.0.0 --port 8000 --workers 1
     volumes:
       - output_volume:/src/output
-      - ./env:/venv
     ports:
       - '8000:8000'
     environment:
