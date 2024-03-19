@@ -2,18 +2,32 @@ let socket;
 let audioRecorder;
 let videoRecorder;
 let isResponding = false;
-let wsUrl = 'ws://192.168.1.10:80/';
+let wsUrl = 'ws://localhost:8000/';
 
 document.getElementById('respondingToggle').addEventListener('click', () => {
   isResponding = !isResponding;
 
   if (socket) {
     socket.emit('respondingStatus', isResponding);
-  }
 
-  // Update the appearance of the toggle button
-  document.getElementById('respondingToggle').classList.toggle('toggled');
-  document.getElementById('respondingToggle').textContent = isResponding ? 'Stop Responding' : 'Start Responding';
+    socket.on('getRespondingStatus', (data) => {
+      const isResponding = data.status;
+      // Update the appearance of the toggle button
+      if (isResponding) {
+        document.getElementById('respondingToggle').classList.add('toggled');
+        document.getElementById('respondingToggle').textContent = 'Stop Responding';
+      } else {
+        document.getElementById('respondingToggle').classList.remove('toggled');
+        document.getElementById('respondingToggle').textContent = 'Start Responding';
+
+        console.log;
+
+        const message = data.message;
+        const responseContainer = document.getElementById('responseContainer');
+        responseContainer.innerHTML += `<p>Message: ${message} <br>Timestamp: ${new Date().toISOString()}</p>`;
+      }
+    });
+  }
 });
 
 // Media Stream Setup
@@ -78,7 +92,7 @@ function initializeVideoRecorder(stream) {
 
 // Socket.IO and Event Handling
 function startStreaming() {
-  socket = io('ws://192.168.1.10:80/', {
+  socket = io(wsUrl, {
     query: {
       interviewToken: '',
       email: '',

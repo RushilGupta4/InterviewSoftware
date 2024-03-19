@@ -25,7 +25,7 @@ WINDOW_SIZE_SAMPLES = 1536  # Number of samples in a single audio chunk
 mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_origins="*")
 
-NO_RESPONSES = False
+NO_RESPONSES = True
 
 
 class ConnectionHandler:
@@ -142,27 +142,49 @@ class ConnectionHandler:
     async def process_video(self, message):
         if not self.is_responding:
             return
-        
+
         # Append video data to the buffer
         if isinstance(message, bytes):
+            print("Added", len(message), "bytes to video buffer")
             self.total_video_bytes.append(message)
-    
+
     async def process_audio(self, message):
         if not self.is_responding:
             return
-        
+
         if isinstance(message, bytes):
             self.total_audio_buffer.append(message)
             self.current_question_audio_buffer.append(message)
-    
+
     async def manage_responding_status(self, message):
-        if message == self.is_responding:
+        if self.getting_next_question:
+            await sio.emit(
+                "getRespondingStatus",
+                {
+                    "status": self.is_responding,
+                    "message": "Please wait for the next question before answering",
+                },
+                to=self.sid,
+            )
             return
 
+        if message == self.is_responding:
+            await sio.emit(
+                "getRespondingStatus",
+                {
+                    "status": self.is_responding,
+                    "message": f"You are {'already responding' if self.is_responding else 'not responding'}",
+                },
+                to=self.sid,
+            )
+
         self.is_responding = message
+        await sio.emit(
+            "getRespondingStatus", {"status": self.is_responding, "message": "Success"}, to=self.sid
+        )
+
         if not self.is_responding:
             await self.ask_next_question()
-        
 
     async def ask_next_question(self):
         if self.getting_next_question:
@@ -289,7 +311,6 @@ async def connect(sid, environ):
 async def disconnect(sid):
     if sid in active_connections:
         await active_connections[sid].on_disconnect()
-        del active_connections[sid]
 
 
 @sio.on("audioData")
@@ -302,6 +323,7 @@ async def process_audio(sid, data):
 async def process_video(sid, data):
     if sid in active_connections:
         await active_connections[sid].process_video(data)
+
 
 @sio.on("respondingStatus")
 async def manage_responding_status(sid, data):
