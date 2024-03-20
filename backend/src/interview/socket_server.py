@@ -37,6 +37,7 @@ class ConnectionHandler:
         # Store important details
         self.sid = sid
         self.interview_id = interview.uid
+        self.interview_data = interview.__dict__
         self.user_name = f"{user.first_name} {user.last_name}"
 
         # Disconnector
@@ -62,19 +63,17 @@ class ConnectionHandler:
         self.chats: list[Chat] = []
         self.llm_client = LLMClient()
 
-        interview_done, first_question = self.llm_client.get_question(
-            f"Company Name: {interview.company_name}\nJob Description: {interview.job_description}\n Candidate Name: {self.user_name}"
-        )
-        first_chat = Chat(first_question, "assistant", interview_done)
-        self.chats.append(first_chat)
-
     async def on_connect(self):
         print("Client connected:", self.sid)
 
         if NO_RESPONSES:
             return
 
-        first_chat = self.chats[0]
+        interview_done, first_question = self.llm_client.get_question(
+            f"Company Name: {self.interview_data['company_name']}\nJob Description: {self.interview_data['job_description']}\n Candidate Name: {self.user_name}"
+        )
+        first_chat = Chat(first_question, "assistant", interview_done)
+        self.chats.append(first_chat)
         await self.send_chat(first_chat)
 
     async def on_disconnect(self):
@@ -85,42 +84,48 @@ class ConnectionHandler:
 
         print("Client disconnecting:", self.sid)
 
-        # Save the audio to a wav file
-        wav_file = f"{self.output_dir}/audio.wav"
-        self.total_audio_buffer.create_wav(wav_file)
+        try:
+            # Save the audio to a wav file
+            wav_file = f"{self.output_dir}/audio.wav"
+            self.total_audio_buffer.create_wav(wav_file)
 
-        # Save the video buffer to a file
-        raw_video_file = f"{self.output_dir}/video.raw"
-        self.total_video_bytes.write_bytes(raw_video_file)
+            # Save the video buffer to a file
+            raw_video_file = f"{self.output_dir}/video.raw"
+            self.total_video_bytes.write_bytes(raw_video_file)
 
-        # Convert the raw video to mp4
-        video_file = f"{self.output_dir}/video.mp4"
-        ffmpeg.input(raw_video_file).output(
-            video_file, vcodec="libx264", crf=23, f="mp4", r=30, loglevel="quiet"
-        ).run()
-        os.remove(raw_video_file)
+            # Convert the raw video to mp4
+            video_file = f"{self.output_dir}/video.mp4"
+            ffmpeg.input(raw_video_file).output(
+                video_file, vcodec="libx264", crf=23, f="mp4", r=30, loglevel="quiet"
+            ).run()
+            os.remove(raw_video_file)
 
-        if not NO_RESPONSES:
-            feedback = self.llm_client.get_feedback(self.user_name, self.chats)
+            if not NO_RESPONSES:
+                feedback = self.llm_client.get_feedback(self.user_name, self.chats)
 
-            with open(f"{self.output_dir}/feedback.json", "w") as f:
-                json.dump(feedback, f)
+                with open(f"{self.output_dir}/feedback.json", "w") as f:
+                    json.dump(feedback, f)
 
-            with open(f"{self.output_dir}/transcript.json", "w") as f:
-                json.dump([i.to_dict() for i in self.chats], f)
+                with open(f"{self.output_dir}/transcript.json", "w") as f:
+                    json.dump([i.to_dict() for i in self.chats], f)
 
-            # Check whether the interview object exists
-            interview_exists = await sync_to_async(
-                Interview.objects.filter(uid=self.interview_id).exists
-            )()
-            if not interview_exists:
-                return
+                # Check whether the interview object exists
+                interview_exists = await sync_to_async(
+                    Interview.objects.filter(uid=self.interview_id).exists
+                )()
+                if not interview_exists:
+                    return
 
-            interview: Interview = await sync_to_async(Interview.objects.get)(uid=self.interview_id)
-            interview.transcript = json.dumps([i.to_dict() for i in self.chats])
-            interview.feedback = json.dumps(feedback)
-            interview.completed = True
-            await sync_to_async(interview.save)()
+                interview: Interview = await sync_to_async(Interview.objects.get)(
+                    uid=self.interview_id
+                )
+                interview.transcript = json.dumps([i.to_dict() for i in self.chats])
+                interview.feedback = json.dumps(feedback)
+                interview.completed = True
+                await sync_to_async(interview.save)()
+
+        except Exception as e:
+            print(e)
 
         print("Client disconnected:", self.sid)
         self.disconnecting = False
