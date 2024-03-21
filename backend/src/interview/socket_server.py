@@ -38,6 +38,7 @@ class ConnectionHandler:
         self.sid = sid
         self.interview_id = interview.uid
         self.interview_data = interview.__dict__
+        print(self.interview_data)
         self.user_name = f"{user.first_name} {user.last_name}"
 
         # Disconnector
@@ -239,15 +240,17 @@ async def connect(sid, environ):
     if True:
 
         class U:
-            first_name = "Rushil"
-            last_name = "Gupta"
+            def __init__(self):
+                self.first_name = "Rushil"
+                self.last_name = "Gupta"
 
         class I:
-            company_name = "Mecha Tech"
-            job_description = "Job brief We are looking for a passionate Software Engineer to design, develop and install software solutions. Software Engineer responsibilities include gathering user requirements, defining system functionality and writing code in various languages, like Java, Ruby on Rails or .NET programming languages (e.g. C++ or JScript.NET.) Our ideal candidates are familiar with the software development life cycle (SDLC) from preliminary system analysis to tests and deployment. Ultimately, the role of the Software Engineer is to build high-quality, innovative and fully performing software that complies with coding standards and technical design. Responsibilities Execute full software development life cycle (SDLC) Develop flowcharts, layouts and documentation to identify requirements and solutions Write well-designed, testable code Produce specifications and determine operational feasibility Integrate software components into a fully functional software system Develop software verification plans and quality assurance procedures Document and maintain software functionality Troubleshoot, debug and upgrade existing systems Deploy programs and evaluate user feedback Comply with project plans and industry standards Ensure software is updated with latest features Requirements and skills Proven work experience as a Software Engineer or Software Developer Experience designing interactive applications Ability to develop software in Java, Ruby on Rails, C++ or other programming languages Excellent knowledge of relational databases, SQL and ORM technologies (JPA2, Hibernate) Experience developing web applications using at least one popular web framework (JSF, Wicket, GWT, Spring MVC) Experience with test-driven development Proficiency in software engineering tools Ability to document requirements and specifications BSc degree in Computer Science, Engineering or relevant field"
-            uid = "test"
-            user = U()
-            sid = "asmdkasndajsnd"
+            def __init__(self):
+                self.company_name = "Mecha Tech"
+                self.job_description = "Job brief We are looking for a passionate Software Engineer to design, develop and install software solutions. Software Engineer responsibilities include gathering user requirements, defining system functionality and writing code in various languages, like Java, Ruby on Rails or .NET programming languages (e.g. C++ or JScript.NET.) Our ideal candidates are familiar with the software development life cycle (SDLC) from preliminary system analysis to tests and deployment. Ultimately, the role of the Software Engineer is to build high-quality, innovative and fully performing software that complies with coding standards and technical design. Responsibilities Execute full software development life cycle (SDLC) Develop flowcharts, layouts and documentation to identify requirements and solutions Write well-designed, testable code Produce specifications and determine operational feasibility Integrate software components into a fully functional software system Develop software verification plans and quality assurance procedures Document and maintain software functionality Troubleshoot, debug and upgrade existing systems Deploy programs and evaluate user feedback Comply with project plans and industry standards Ensure software is updated with latest features Requirements and skills Proven work experience as a Software Engineer or Software Developer Experience designing interactive applications Ability to develop software in Java, Ruby on Rails, C++ or other programming languages Excellent knowledge of relational databases, SQL and ORM technologies (JPA2, Hibernate) Experience developing web applications using at least one popular web framework (JSF, Wicket, GWT, Spring MVC) Experience with test-driven development Proficiency in software engineering tools Ability to document requirements and specifications BSc degree in Computer Science, Engineering or relevant field"
+                self.uid = "test"
+                self.user = U()
+                self.sid = "asmdkasndajsnd"
 
         active_connections[sid] = ConnectionHandler(sid, I(), U())
         await active_connections[sid].on_connect()
