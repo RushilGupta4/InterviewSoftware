@@ -26,7 +26,7 @@ WINDOW_SIZE_SAMPLES = 1536  # Number of samples in a single audio chunk
 mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_origins="*")
 
-NO_RESPONSES = True
+NO_RESPONSES = False
 
 
 class ConnectionHandler:
@@ -54,7 +54,7 @@ class ConnectionHandler:
         self.total_audio_buffer = MediaBuffer(SAMPLING_RATE)
         self.total_video_bytes = MediaBuffer(SAMPLING_RATE)
 
-        # Initialize VAD iterator
+        # Initialize flags
         self.getting_next_question = False
         self.is_responding = False
 
@@ -63,7 +63,7 @@ class ConnectionHandler:
 
         # Chats
         self.chats: list[Chat] = []
-        self.llm_client = LLMClient()
+        self.llm_client = LLMClient(interview_data=self.interview_data, user_name=self.user_name)
 
     async def on_connect(self):
         print("Client connected:", self.sid)
@@ -71,9 +71,7 @@ class ConnectionHandler:
         if NO_RESPONSES:
             return
 
-        interview_done, first_question = self.llm_client.get_question(
-            f"Company Name: {self.interview_data['company_name']}\nJob Description: {self.interview_data['job_description']}\n Candidate Name: {self.user_name}"
-        )
+        interview_done, first_question = await self.llm_client.start_interview()
         first_chat = Chat(first_question, "assistant", interview_done)
         self.chats.append(first_chat)
         await self.send_chat(first_chat)
@@ -103,7 +101,7 @@ class ConnectionHandler:
             os.remove(raw_video_file)
 
             if not NO_RESPONSES:
-                feedback = self.llm_client.get_feedback(self.user_name, self.chats)
+                feedback = await self.llm_client.get_feedback(self.user_name, self.chats)
 
                 with open(f"{self.output_dir}/feedback.json", "w") as f:
                     json.dump(feedback, f)
@@ -185,11 +183,13 @@ class ConnectionHandler:
             )
 
         self.is_responding = message
-        await sio.emit(
-            "getRespondingStatus", {"status": self.is_responding, "message": "Success"}, to=self.sid
-        )
 
-        self.event.wait(0.1)
+        await sio.emit(
+            event="getRespondingStatus",
+            data={"status": self.is_responding, "message": "Success"},
+            to=self.sid,
+            ignore_queue=True,
+        )
 
         if not self.is_responding:
             await self.ask_next_question()
@@ -199,6 +199,7 @@ class ConnectionHandler:
             return
 
         if NO_RESPONSES:
+            self.getting_next_question = False
             return
 
         self.getting_next_question = True
@@ -217,8 +218,8 @@ class ConnectionHandler:
 
         os.remove(wav_file)
 
-        # Get the next question from OpenAI
-        interview_ended, text = self.llm_client.get_question(transcript)
+        # Get the next question from the LLM
+        interview_ended, text = await self.llm_client.get_question(transcript)
         print("Question:", text)
         chat = Chat(text, "assistant", interview_ended)
         self.chats.append(chat)

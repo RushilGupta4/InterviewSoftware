@@ -2,31 +2,15 @@ let socket;
 let audioRecorder;
 let videoRecorder;
 let isResponding = false;
-let wsUrl = 'ws://localhost:8000/';
+let wsUrl = 'ws://code.vondr.in/';
+wsUrl = 'http://223.178.215.118:7000/';
+// wsUrl = 'ws://localhost:8000/';
 
 document.getElementById('respondingToggle').addEventListener('click', () => {
   isResponding = !isResponding;
 
   if (socket) {
     socket.emit('respondingStatus', isResponding);
-
-    socket.on('getRespondingStatus', (data) => {
-      const isResponding = data.status;
-      // Update the appearance of the toggle button
-      if (isResponding) {
-        document.getElementById('respondingToggle').classList.add('toggled');
-        document.getElementById('respondingToggle').textContent = 'Stop Responding';
-      } else {
-        document.getElementById('respondingToggle').classList.remove('toggled');
-        document.getElementById('respondingToggle').textContent = 'Start Responding';
-
-        console.log;
-
-        const message = data.message;
-        const responseContainer = document.getElementById('responseContainer');
-        responseContainer.innerHTML += `<p>Message: ${message} <br>Timestamp: ${new Date().toISOString()}</p>`;
-      }
-    });
   }
 });
 
@@ -99,16 +83,45 @@ function startStreaming() {
     },
   });
 
+  socket.on('getRespondingStatus', (data) => {
+    console.log(data);
+    const isResponding = data.status;
+
+    // Update the appearance of the toggle button
+    if (isResponding) {
+      document.getElementById('respondingToggle').classList.add('toggled');
+      document.getElementById('respondingToggle').textContent = 'Stop Responding';
+    } else {
+      document.getElementById('respondingToggle').classList.remove('toggled');
+      document.getElementById('respondingToggle').textContent = 'Start Responding';
+
+      const message = data.message;
+
+      if (message == 'Success') return;
+
+      const responseContainer = document.getElementById('responseContainer');
+      responseContainer.innerHTML += `<p>Message: ${message} <br>Timestamp: ${new Date().toISOString()}</p>`;
+    }
+  });
+
   socket.on('connect', () => {
     console.log('Connected to the server');
+
+    document.getElementById('buttonStart').disabled = true;
+    document.getElementById('buttonStop').disabled = false;
+    document.getElementById('responseContainer').innerHTML = '<p>Streaming...</p>';
+
+    // Show the start and stop responding buttons
+    document.getElementById('respondingToggle').disabled = false;
   });
 
   socket.on('chat', (data) => {
     console.log(data);
-
     const responseContainer = document.getElementById('responseContainer');
 
-    responseContainer.innerHTML += `<p>Message: ${data.message} <br>Timestamp: ${data.timestamp}</p>`;
+    setTimeout(() => {
+      responseContainer.innerHTML += `<p>Message: ${data.message} <br>Timestamp: ${data.timestamp}</p>`;
+    }, 750);
 
     if (data.audio) {
       let audioSrc = 'data:audio/mp3;base64,' + data.audio;
@@ -126,13 +139,6 @@ function startStreaming() {
 
   audioRecorder.startRecording();
   videoRecorder.startRecording();
-
-  document.getElementById('buttonStart').disabled = true;
-  document.getElementById('buttonStop').disabled = false;
-  document.getElementById('responseContainer').innerHTML = '<p>Streaming...</p>';
-
-  // Show the start and stop responding buttons
-  document.getElementById('respondingToggle').disabled = false;
 }
 
 function stopStreaming() {
