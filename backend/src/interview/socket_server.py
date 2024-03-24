@@ -3,6 +3,7 @@ import json
 import os
 import io
 import base64
+import threading
 
 import jwt
 import socketio
@@ -33,12 +34,12 @@ class ConnectionHandler:
 
         # Set the time gap threshold in seconds
         self.threshold = 5
+        self.event = threading.Event()
 
         # Store important details
         self.sid = sid
         self.interview_id = interview.uid
         self.interview_data = interview.__dict__
-        print(self.interview_data)
         self.user_name = f"{user.first_name} {user.last_name}"
 
         # Disconnector
@@ -151,7 +152,6 @@ class ConnectionHandler:
 
         # Append video data to the buffer
         if isinstance(message, bytes):
-            print("Added", len(message), "bytes to video buffer")
             self.total_video_bytes.append(message)
 
     async def process_audio(self, message):
@@ -188,6 +188,8 @@ class ConnectionHandler:
         await sio.emit(
             "getRespondingStatus", {"status": self.is_responding, "message": "Success"}, to=self.sid
         )
+
+        self.event.wait(0.1)
 
         if not self.is_responding:
             await self.ask_next_question()
