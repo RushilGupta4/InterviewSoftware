@@ -4,6 +4,7 @@ import os
 import io
 import base64
 import threading
+import logging
 
 import jwt
 import socketio
@@ -25,6 +26,10 @@ WINDOW_SIZE_SAMPLES = 1536  # Number of samples in a single audio chunk
 
 mgr = socketio.AsyncManager()
 sio = socketio.AsyncServer(client_manager=mgr, async_mode="asgi", cors_allowed_origins="*")
+
+
+logger = logging.getLogger(__name__)
+print = logger.info
 
 NO_RESPONSES = False
 

@@ -1,4 +1,6 @@
 import json
+import logging
+
 from langchain_community.chat_models import ChatAnyscale
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
@@ -11,6 +13,10 @@ from . import prompts
 MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"
 FEEDBACK_MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"
 MAX_TOKENS_PER_QUESTION = 100
+
+
+logger = logging.getLogger(__name__)
+print = logger.info
 
 
 class LLMClient:
